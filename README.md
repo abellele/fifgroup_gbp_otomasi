@@ -55,6 +55,16 @@ Klik **"Enable"** untuk masing-masing.
 
 ## LANGKAH 3 — Buat OAuth 2.0 Credentials
 
+Sebelum membuat client ID, Google biasanya akan meminta kamu menyiapkan **OAuth consent screen** dulu.
+
+1. Di Google Cloud Console → **APIs & Services → OAuth consent screen**
+2. Pilih tipe **External** jika ini untuk akun pribadi / testing
+3. Isi **App name**, **User support email**, dan **Developer contact information**
+4. Jika diminta, tambahkan akun Google kamu ke daftar **Test users**
+5. Simpan perubahan
+
+Setelah consent screen selesai, lanjut ke pembuatan credential:
+
 1. Di Google Cloud Console → **APIs & Services → Credentials**
 2. Klik **"Create Credentials" → "OAuth 2.0 Client ID"**
 3. Pilih **Application type: Desktop app**
@@ -69,6 +79,7 @@ Klik **"Enable"** untuk masing-masing.
 
 ```bash
 # Pastikan Python 3.9+ sudah terinstall
+# Untuk Python 3.13, pakai pin dependency yang sudah disesuaikan di requirements ini
 python --version
 
 # Install semua library
