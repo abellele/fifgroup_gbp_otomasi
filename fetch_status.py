@@ -280,6 +280,7 @@ def parse_location(location: dict) -> dict:
         "location_name"    : location.get("name", ""),
         "store_code"       : location.get("storeCode", ""),
         "business_name"    : location.get("title", ""),
+        "account_name"     : location.get("account_name", ""),
         "address"          : full_address,
         "latitude"         : latitude,         # float atau None
         "longitude"        : longitude,        # float atau None
@@ -292,6 +293,33 @@ def parse_location(location: dict) -> dict:
         "maps_uri"         : maps_uri,
         "fetched_at"       : datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
+
+
+def fetch_records(account_id: str | None = None) -> list[dict]:
+    """Ambil dan parse semua lokasi GBP dari API tanpa menyimpan ke file atau DB."""
+    log.info("Memulai autentikasi Google...")
+    creds   = get_credentials()
+    headers = make_headers(creds)
+
+    if account_id:
+        accounts = [{"name": account_id}]
+    else:
+        accounts = get_accounts(headers)
+
+    all_records = []
+    for account in accounts:
+        acct_name = account["name"]
+        log.info(f"Mengambil lokasi dari akun: {acct_name}")
+        try:
+            locations = get_locations(acct_name, headers)
+            for loc in locations:
+                record = parse_location(loc)
+                record["account_name"] = acct_name
+                all_records.append(record)
+        except req_lib.HTTPError as e:
+            log.error(f"Gagal: {acct_name}: {e}")
+
+    return all_records
 
 
 # ──────────────────────────────────────────────
@@ -344,28 +372,8 @@ def main():
 
     output_file = args.output or f"gbp_status_{datetime.now().strftime('%Y%m%d')}.csv"
 
-    # 1. Auth
-    log.info("Memulai autentikasi Google...")
-    creds   = get_credentials()
-    headers = make_headers(creds)
-
-    # 2. Ambil akun
-    if args.account_id:
-        accounts = [{"name": args.account_id}]
-    else:
-        accounts = get_accounts(headers)
-
-    # 3. Ambil & parse semua lokasi
-    all_records = []
-    for account in accounts:
-        acct_name = account["name"]
-        log.info(f"Mengambil lokasi dari akun: {acct_name}")
-        try:
-            locations = get_locations(acct_name, headers)
-            for loc in locations:
-                all_records.append(parse_location(loc))
-        except req_lib.HTTPError as e:
-            log.error(f"Gagal: {acct_name}: {e}")
+    # 1-3. Ambil & parse semua lokasi
+    all_records = fetch_records(args.account_id)
 
     # 4. Simpan CSV
     save_to_csv(all_records, output_file)

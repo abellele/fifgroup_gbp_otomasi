@@ -1,0 +1,451 @@
+{% extends "gbp/base.html" %}
+{% block title %}Update Status Verifikasi{% endblock %}
+
+{% block breadcrumb %}
+<span class="text-slate-500">Dashboard</span>
+<span class="text-slate-300 mx-1">/</span>
+<span class="text-slate-700 font-medium">Update Status Verifikasi</span>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Page Header ─────────────────────────────────────── -->
+<div class="mb-6">
+  <h1 class="text-3xl font-display font-bold text-slate-900 tracking-tight">Update Status Verifikasi GBP</h1>
+  <p class="mt-1 text-sm text-slate-500">
+    Bandingkan status verifikasi master dengan data terbaru dari Google Business Profile API,
+    lalu update hanya baris yang berubah.
+  </p>
+</div>
+
+<!-- ── Info Banner ─────────────────────────────────────── -->
+<div class="flex items-start gap-3 px-4 py-3.5 rounded-xl bg-blue-50 border border-blue-100 text-blue-800 text-sm mb-6">
+  <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+  </svg>
+  <span>
+    Identifikasi baris dilakukan dengan prioritas: <strong>Network ID → Store Code → Branch ID → Business Name</strong>.
+    Identifier kosong atau ganda akan ditandai untuk cek manual.
+  </span>
+</div>
+
+<!-- ── Form ────────────────────────────────────────────── -->
+<div class="bg-white rounded-2xl border border-gray-200 shadow-card p-6 mb-6">
+  <form method="POST" enctype="multipart/form-data" id="update-form">
+    {% csrf_token %}
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+      <!-- Sumber Master -->
+      <div class="md:col-span-2">
+        <label class="block text-sm font-medium text-slate-700 mb-2">Sumber Master Data</label>
+        <div class="flex gap-3" id="source-type-group">
+          <label id="label-csv" class="flex items-center gap-2.5 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all flex-1
+                 {% if not form.source_type.value or form.source_type.value == 'csv' %}border-primary bg-primary-50{% else %}border-gray-200 hover:border-gray-300{% endif %}">
+            <input type="radio" name="source_type" value="csv"
+                   {% if not form.source_type.value or form.source_type.value == 'csv' %}checked{% endif %}
+                   onchange="toggleSourceType(this.value)"
+                   class="accent-primary">
+            <div>
+              <div class="text-sm font-semibold text-slate-700">📄 CSV File</div>
+              <div class="text-xs text-slate-400">Upload atau path ke file CSV</div>
+            </div>
+          </label>
+          <label id="label-sqlite" class="flex items-center gap-2.5 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all flex-1
+                 {% if form.source_type.value == 'sqlite' %}border-primary bg-primary-50{% else %}border-gray-200 hover:border-gray-300{% endif %}">
+            <input type="radio" name="source_type" value="sqlite"
+                   {% if form.source_type.value == 'sqlite' %}checked{% endif %}
+                   onchange="toggleSourceType(this.value)"
+                   class="accent-primary">
+            <div>
+              <div class="text-sm font-semibold text-slate-700">🗄️ SQLite DB</div>
+              <div class="text-xs text-slate-400">Koneksi ke file database SQLite</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Upload CSV -->
+      <div id="csv-upload-group">
+        <label class="block text-sm font-medium text-slate-700 mb-2">Upload File Master CSV</label>
+        <div id="file-drop-area"
+              class="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer
+                     hover:border-primary hover:bg-primary-50/30 transition-all group">
+          <svg class="w-8 h-8 text-slate-300 group-hover:text-primary mx-auto mb-2 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+          </svg>
+          <p class="text-sm text-slate-500 group-hover:text-slate-700">Drag & drop atau klik untuk pilih file</p>
+          <p class="text-xs text-slate-400 mt-1" id="file-name-display">Format: .csv</p>
+          <input type="file" name="master_file" accept=".csv" id="master-file-input"
+                 class="hidden" onchange="showFileName(this)">
+        </div>
+      </div>
+
+      <!-- Path Master -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-2" for="master-path-input">
+          Path File Master
+          <span class="text-slate-400 font-normal">(opsional jika upload)</span>
+        </label>
+        <input type="text" name="master_path" id="master-path-input"
+               value="{{ form.master_path.value|default:'' }}"
+               placeholder="D:\path\to\master.csv atau master.db"
+               class="w-full px-3.5 py-2.5 text-sm border border-gray-200 rounded-xl bg-white
+                      focus:outline-none focus:ring-2 focus:ring-red-100 focus:border-[#E20820]
+                      placeholder:text-slate-300 transition-all">
+      </div>
+
+      <!-- SQLite Table (tersembunyi jika CSV) -->
+      <div id="sqlite-table-group" class="hidden">
+        <label class="block text-sm font-medium text-slate-700 mb-2" for="sqlite-table-input">
+          Nama Tabel SQLite
+        </label>
+        <input type="text" name="sqlite_table" id="sqlite-table-input"
+               value="{{ form.sqlite_table.value|default:'kios' }}"
+               placeholder="kios"
+                class="w-full px-3.5 py-2.5 text-sm border border-gray-200 rounded-xl bg-white
+                       focus:outline-none focus:ring-2 focus:ring-primary-100 focus:border-primary transition-all">
+      </div>
+
+      <!-- Account ID -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-2" for="account-id-input">
+          Account ID GBP
+          <span class="text-slate-400 font-normal">(kosongkan untuk semua akun)</span>
+        </label>
+        <input type="text" name="account_id" id="account-id-input"
+               value="{{ form.account_id.value|default:'' }}"
+               placeholder="accounts/123456789"
+               class="w-full px-3.5 py-2.5 text-sm border border-gray-200 rounded-xl bg-white
+                      focus:outline-none focus:ring-2 focus:ring-red-100 focus:border-[#E20820]
+                      placeholder:text-slate-300 transition-all">
+      </div>
+
+      <!-- Save to disk -->
+      <div class="md:col-span-2">
+        <label class="flex items-center gap-3 cursor-pointer group">
+          <div class="relative">
+            <input type="checkbox" name="save_to_disk" id="save-to-disk-checkbox"
+                   {% if form.save_to_disk.value %}checked{% endif %}
+                   class="sr-only peer">
+            <div class="w-10 h-6 bg-gray-200 peer-focus:ring-2 peer-focus:ring-primary-100 rounded-full peer
+                        peer-checked:bg-primary transition-all"></div>
+            <div class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-all
+                        peer-checked:translate-x-4 shadow-sm"></div>
+          </div>
+          <div>
+            <div class="text-sm font-medium text-slate-700">Simpan perubahan ke file master di disk</div>
+            <div class="text-xs text-slate-400">Memerlukan path file CSV yang valid</div>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    {% if form.errors %}
+    <div class="mt-4 p-3 rounded-xl bg-red-50 border border-red-200">
+      {% for field, errors in form.errors.items %}
+        {% for error in errors %}
+        <p class="text-sm text-red-700 flex items-center gap-2">
+          <span>⚠</span> {{ error }}
+        </p>
+        {% endfor %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="mt-6 flex items-center gap-4">
+      <button type="submit" id="btn-submit-update"
+              class="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-primary hover:bg-primary-700 shadow-md shadow-primary/20 hover:shadow-lg hover:-translate-y-0.5 active:scale-95 transition-all">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        Ambil Data Terbaru & Bandingkan
+      </button>
+      <span class="text-xs text-slate-400">Proses akan mengambil data langsung dari GBP API</span>
+    </div>
+  </form>
+</div>
+
+<!-- ── Loading Overlay ─────────────────────────────────── -->
+<div id="loading-overlay"
+     class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+  <div class="bg-white rounded-2xl shadow-xl p-8 flex flex-col items-center max-w-xs w-full mx-4">
+    <div class="w-12 h-12 border-4 border-gray-200 border-t-[#E20820] rounded-full animate-spin mb-4"></div>
+    <p class="text-sm font-semibold text-slate-800 text-center">Mengambil data dari GBP API...</p>
+    <p class="text-xs text-slate-400 text-center mt-1">Mungkin memerlukan beberapa menit</p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- HASIL REKONSILIASI                                     -->
+<!-- ══════════════════════════════════════════════════════ -->
+{% if result %}
+
+<!-- ── Summary Metrics ────────────────────────────────── -->
+<div class="bg-white rounded-2xl border border-gray-200 shadow-card p-5 mb-5">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-sm font-semibold text-slate-800">Hasil Rekonsiliasi</h2>
+    <span class="text-xs text-slate-400">
+      Master: <strong class="text-slate-700">{{ master_row_count }}</strong> baris ·
+      API: <strong class="text-slate-700">{{ api_row_count }}</strong> baris
+      {% if master_source_label %} · <code class="text-xs bg-slate-100 px-1.5 py-0.5 rounded">{{ master_source_label }}</code>{% endif %}
+    </span>
+  </div>
+  <div class="grid grid-cols-3 sm:grid-cols-5 gap-3">
+    <div class="text-center p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+      <div class="text-xl font-bold text-emerald-700 tabular-nums">{{ summary.matched }}</div>
+      <div class="text-xs text-emerald-600 mt-0.5">Matched</div>
+    </div>
+    <div class="text-center p-3 rounded-xl bg-blue-50 border border-blue-100">
+      <div class="text-xl font-bold text-blue-700 tabular-nums">{{ summary.updated }}</div>
+      <div class="text-xs text-blue-600 mt-0.5">Updated</div>
+    </div>
+    <div class="text-center p-3 rounded-xl bg-amber-50 border border-amber-100">
+      <div class="text-xl font-bold text-amber-700 tabular-nums">{{ summary.manual_review }}</div>
+      <div class="text-xs text-amber-600 mt-0.5">Manual Review</div>
+    </div>
+    <div class="text-center p-3 rounded-xl bg-slate-50 border border-slate-200">
+      <div class="text-xl font-bold text-slate-700 tabular-nums">{{ summary.not_found }}</div>
+      <div class="text-xs text-slate-500 mt-0.5">Not Found</div>
+    </div>
+    <div class="text-center p-3 rounded-xl bg-slate-50 border border-slate-200">
+      <div class="text-xl font-bold text-slate-500 tabular-nums">{{ summary.invalid }}</div>
+      <div class="text-xs text-slate-400 mt-0.5">Invalid</div>
+    </div>
+  </div>
+  {% if save_result_msg %}
+  <div class="mt-4 flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 px-4 py-3 rounded-xl">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    {{ save_result_msg }}
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── Network yang Berubah ───────────────────────────── -->
+<div class="bg-white rounded-2xl border border-gray-200 shadow-card p-5 mb-5">
+  <h3 class="text-sm font-semibold text-slate-800 mb-3">Network yang Mengalami Perubahan Status Verifikasi</h3>
+
+  {% if changed_rows %}
+  <div class="space-y-2">
+    {% for row in changed_rows %}
+    <div class="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100 text-sm">
+      <svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+      </svg>
+      <span class="text-slate-700">
+        <strong>{{ row.identifier_value }}</strong> mengalami perubahan status verifikasi dari
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold
+          {% if row.old_status == 'Verified' %}bg-emerald-100 text-emerald-800
+          {% elif row.old_status == 'Duplicate' %}bg-amber-100 text-amber-800
+          {% elif row.old_status == 'Suspended' %}bg-red-100 text-red-800
+          {% else %}bg-slate-100 text-slate-600{% endif %}">
+          {{ row.old_status|default:"—" }}
+        </span>
+        menjadi
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold
+          {% if row.new_status == 'Verified' %}bg-emerald-100 text-emerald-800
+          {% elif row.new_status == 'Duplicate' %}bg-amber-100 text-amber-800
+          {% elif row.new_status == 'Suspended' %}bg-red-100 text-red-800
+          {% else %}bg-slate-100 text-slate-600{% endif %}">
+          {{ row.new_status|default:"—" }}
+        </span>.
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-500">
+    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    Tidak ada network yang mengalami perubahan status verifikasi.
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── Tabel Hasil Pencocokan ─────────────────────────── -->
+<div class="bg-white rounded-2xl border border-gray-200 shadow-card">
+  <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+    <h3 class="text-sm font-semibold text-slate-800">
+      Tabel Hasil Pencocokan
+      <span class="ml-1.5 text-xs font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{{ comparison_rows|length }} baris</span>
+    </h3>
+    <!-- Toggle collapse -->
+    <button onclick="toggleResultTable()"
+            id="toggle-table-btn"
+            class="text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors">
+      Sembunyikan ▲
+    </button>
+  </div>
+
+  <div id="result-table-container">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm" id="comparison-table">
+        <thead>
+          <tr class="border-b border-gray-100">
+            <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status Match</th>
+            <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Rule</th>
+            <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Identifier</th>
+            <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status Lama</th>
+            <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status Baru</th>
+            <th class="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Berubah?</th>
+            <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Catatan</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+          {% for row in comparison_rows %}
+          <tr class="hover:bg-gray-50/60 transition-colors {% if row.status_changed %}bg-blue-50/30{% endif %}">
+            <td class="px-5 py-3">
+              {% with ms=row.match_status %}
+              <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold
+                {% if ms == 'Matched' %}bg-emerald-100 text-emerald-800
+                {% elif ms == 'Not Found' %}bg-slate-100 text-slate-600
+                {% elif ms == 'Invalid' %}bg-red-100 text-red-700
+                {% elif ms == 'Manual Review' %}bg-amber-100 text-amber-800
+                {% else %}bg-slate-100 text-slate-600{% endif %}">
+                {{ ms }}
+              </span>
+              {% endwith %}
+            </td>
+            <td class="px-5 py-3 text-xs text-slate-400 max-w-24 truncate">{{ row.match_rule }}</td>
+            <td class="px-5 py-3 font-medium text-slate-800">{{ row.identifier_value|default:"—" }}</td>
+            <td class="px-5 py-3">
+              {% if row.old_status %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                {% if row.old_status == 'Verified' %}bg-emerald-100 text-emerald-800
+                {% elif row.old_status == 'Duplicate' %}bg-amber-100 text-amber-800
+                {% elif row.old_status == 'Suspended' %}bg-red-100 text-red-800
+                {% else %}bg-slate-100 text-slate-600{% endif %}">
+                {{ row.old_status }}
+              </span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="px-5 py-3">
+              {% if row.new_status %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                {% if row.new_status == 'Verified' %}bg-emerald-100 text-emerald-800
+                {% elif row.new_status == 'Duplicate' %}bg-amber-100 text-amber-800
+                {% elif row.new_status == 'Suspended' %}bg-red-100 text-red-800
+                {% else %}bg-slate-100 text-slate-600{% endif %}">
+                {{ row.new_status }}
+              </span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="px-5 py-3 text-center">
+              {% if row.status_changed %}
+              <svg class="w-4 h-4 text-blue-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+              </svg>
+              {% else %}
+              <span class="text-slate-300">—</span>
+              {% endif %}
+            </td>
+            <td class="px-5 py-3 text-xs text-slate-400 max-w-48 truncate">{{ row.change_note|default:"—" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="px-5 py-8 text-center text-sm text-slate-400">Tidak ada data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ── Download Button — tepat di bawah tabel ────── -->
+    <div class="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+      <span class="text-xs text-slate-400">
+        Job #{{ job.pk }} disimpan ke database ·
+        {{ comparison_rows|length }} baris
+      </span>
+      {% if job %}
+      <a href="{% url 'gbp:download_reconciliation' job.pk %}"
+         id="btn-download-reconciliation"
+         class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-accent hover:bg-accent-700 shadow-md shadow-accent/20 hover:shadow-lg hover:-translate-y-0.5 active:scale-95 transition-all">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        Download Hasil Pencocokan
+      </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  function toggleSourceType(value) {
+    const csvGroup = document.getElementById('csv-upload-group');
+    const sqliteGroup = document.getElementById('sqlite-table-group');
+    const labelCsv = document.getElementById('label-csv');
+    const labelSqlite = document.getElementById('label-sqlite');
+
+    if (value === 'sqlite') {
+      csvGroup.classList.add('hidden');
+      sqliteGroup.classList.remove('hidden');
+      labelSqlite.classList.add('border-[#E20820]', 'bg-red-50');
+      labelSqlite.classList.remove('border-gray-200');
+      labelCsv.classList.remove('border-[#E20820]', 'bg-red-50');
+      labelCsv.classList.add('border-gray-200');
+    } else {
+      csvGroup.classList.remove('hidden');
+      sqliteGroup.classList.add('hidden');
+      labelCsv.classList.add('border-[#E20820]', 'bg-red-50');
+      labelCsv.classList.remove('border-gray-200');
+      labelSqlite.classList.remove('border-[#E20820]', 'bg-red-50');
+      labelSqlite.classList.add('border-gray-200');
+    }
+  }
+
+  function showFileName(input) {
+    const display = document.getElementById('file-name-display');
+    if (input.files && input.files[0]) {
+      display.textContent = '📄 ' + input.files[0].name;
+    }
+  }
+
+  // Show loading overlay saat submit
+  document.getElementById('update-form').addEventListener('submit', function() {
+    document.getElementById('loading-overlay').classList.remove('hidden');
+  });
+
+  // Drag & drop
+  const dropArea = document.getElementById('file-drop-area');
+  const fileInput = document.getElementById('master-file-input');
+  if (dropArea && fileInput) {
+    dropArea.addEventListener('click', () => fileInput.click());
+    dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('border-[#E20820]', 'bg-red-50'); });
+    dropArea.addEventListener('dragleave', () => dropArea.classList.remove('border-[#E20820]', 'bg-red-50'));
+    dropArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropArea.classList.remove('border-[#E20820]', 'bg-red-50');
+      if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        showFileName(fileInput);
+      }
+    });
+  }
+
+  // Toggle result table
+  let tableVisible = true;
+  function toggleResultTable() {
+    const container = document.getElementById('result-table-container');
+    const btn = document.getElementById('toggle-table-btn');
+    tableVisible = !tableVisible;
+    if (tableVisible) {
+      container.classList.remove('hidden');
+      btn.textContent = 'Sembunyikan ▲';
+    } else {
+      container.classList.add('hidden');
+      btn.textContent = 'Tampilkan ▼';
+    }
+  }
+
+  // Init
+  const initialSource = document.querySelector('input[name="source_type"]:checked');
+  if (initialSource) toggleSourceType(initialSource.value);
+</script>
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends "gbp/base.html" %}
+{% block title %}Map View{% endblock %}
+
+{% block breadcrumb %}
+<span class="text-slate-500">Dashboard</span>
+<span class="text-slate-300 mx-1">/</span>
+<span class="text-slate-700 font-medium">Map View</span>
+{% endblock %}
+
+{% block content %}
+
+{% if no_data %}
+<div class="flex flex-col items-center justify-center py-24 text-center">
+  <div class="w-20 h-20 rounded-2xl bg-slate-100 flex items-center justify-center mb-5">
+    <svg class="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+    </svg>
+  </div>
+  <h2 class="text-xl font-semibold text-slate-800 mb-2">Belum Ada Data</h2>
+  <p class="text-slate-500 text-sm">Jalankan fetch data terlebih dahulu.</p>
+</div>
+
+{% else %}
+
+<!-- ── Header ──────────────────────────────────────────── -->
+<div class="mb-5">
+  <h1 class="text-3xl font-display font-bold text-slate-900 tracking-tight">Map View</h1>
+  <p class="mt-1 text-sm text-slate-500">Persebaran lokasi GBP berdasarkan koordinat</p>
+</div>
+
+<!-- ── Summary Cards ──────────────────────────────────── -->
+<div class="grid grid-cols-3 gap-4 mb-5">
+  <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-card text-center hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 group">
+    <div class="text-3xl font-display font-bold text-slate-900 tabular-nums">{{ with_coords_count }}</div>
+    <div class="text-xs text-slate-500 mt-1 font-medium tracking-wide uppercase">Ditampilkan di Peta</div>
+  </div>
+  <div class="bg-white rounded-2xl border border-amber-100 p-4 shadow-card text-center hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 group">
+    <div class="text-3xl font-display font-bold text-amber-500 tabular-nums">{{ without_coords_count }}</div>
+    <div class="text-xs text-amber-500 mt-1 font-medium tracking-wide uppercase">Tanpa Koordinat</div>
+  </div>
+  <div class="bg-white rounded-2xl border border-primary/20 p-4 shadow-card text-center hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 group">
+    <div class="text-3xl font-display font-bold text-primary tabular-nums">{{ total_count }}</div>
+    <div class="text-xs text-primary/80 mt-1 font-medium tracking-wide uppercase">Total Filtered</div>
+  </div>
+</div>
+
+<!-- ── Status Filter ──────────────────────────────────── -->
+<form method="GET" class="bg-white rounded-2xl border border-gray-200 shadow-card p-4 mb-5 flex flex-wrap items-center gap-4">
+  <input type="hidden" name="run_id" value="{{ sel_run_id }}">
+  <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Filter Status:</span>
+  {% for s in all_statuses %}
+  <label class="flex items-center gap-1.5 cursor-pointer text-sm">
+    <input type="checkbox" name="status" value="{{ s }}"
+           {% if s in selected_statuses %}checked{% endif %}
+           class="w-3.5 h-3.5 rounded accent-accent">
+    <span class="{% if s == 'Verified' %}text-emerald-600
+                 {% elif s == 'Duplicate' %}text-amber-600
+                 {% elif s == 'Suspended' %}text-accent
+                 {% else %}text-slate-600{% endif %} text-xs font-medium">{{ s }}</span>
+  </label>
+  {% endfor %}
+  <button type="submit"
+          class="ml-auto px-4 py-1.5 rounded-xl text-sm font-medium text-white bg-primary hover:bg-primary-700 shadow-md shadow-primary/20 hover:shadow-lg hover:-translate-y-0.5 active:scale-95 transition-all">
+    Terapkan
+  </button>
+</form>
+
+<!-- ── Map ────────────────────────────────────────────── -->
+{% if map_html %}
+<div class="bg-white rounded-2xl border border-gray-200 shadow-card overflow-hidden" style="height: 540px;">
+  {{ map_html|safe }}
+</div>
+{% else %}
+<div class="bg-white rounded-2xl border border-gray-200 shadow-card flex flex-col items-center justify-center py-20 text-center">
+  <svg class="w-12 h-12 text-slate-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+  </svg>
+  <p class="text-sm font-medium text-slate-500">Tidak ada lokasi dengan koordinat valid</p>
+  <p class="text-xs text-slate-400 mt-1">Total {{ without_coords_count }} lokasi tidak memiliki koordinat</p>
+</div>
+{% endif %}
+
+<!-- ── Koordinat Bermasalah ───────────────────────────── -->
+{% if coord_issues %}
+<div class="bg-white rounded-2xl border border-amber-200 shadow-card mt-5">
+  <div class="px-5 py-4 border-b border-amber-100 flex items-center gap-2">
+    <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+    </svg>
+    <h3 class="text-sm font-semibold text-amber-800">Masalah Koordinat ({{ coord_issues|length }})</h3>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-amber-50">
+          <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Store Code</th>
+          <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Nama Bisnis</th>
+          <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Masalah</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-amber-50">
+        {% for s in coord_issues %}
+        <tr class="hover:bg-amber-50/40">
+          <td class="px-5 py-3 font-mono text-xs text-slate-500">{{ s.store_code|default:"—" }}</td>
+          <td class="px-5 py-3 font-medium text-slate-700">{{ s.business_name|default:"—" }}</td>
+          <td class="px-5 py-3">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-amber-100 text-amber-800">
+              {{ s.coord_status|default:"UNKNOWN" }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* Fix Folium map height */
+  #map_id, .folium-map { height: 100% !important; width: 100% !important; }
+</style>
+{% endblock %}
