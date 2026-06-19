@@ -7,106 +7,346 @@
 <span class="text-slate-700 font-medium">Map View</span>
 {% endblock %}
 
+{% block extra_head %}
+<style>
+  /* ── Glass card ── */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 4px 24px rgba(139, 92, 246, 0.07), 0 1.5px 6px rgba(0,0,0,0.05);
+  }
+
+  /* ── Stat pill ── */
+  .stat-pill {
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(255,255,255,0.9);
+    box-shadow: 0 2px 12px rgba(139,92,246,0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .stat-pill:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(139,92,246,0.14);
+  }
+
+  /* ── Map toggle ── */
+  .map-toggle-wrap {
+    background: rgba(237, 233, 254, 0.6);
+    border: 1px solid rgba(167, 139, 250, 0.25);
+  }
+  .map-toggle-btn-active {
+    background: white;
+    color: #5b21b6;
+    box-shadow: 0 2px 10px rgba(139,92,246,0.2);
+    font-weight: 600;
+  }
+  .map-toggle-btn-inactive {
+    background: transparent;
+    color: #94a3b8;
+  }
+  .map-toggle-btn-inactive:hover { color: #5b21b6; }
+
+  /* ── Filter chip ── */
+  .filter-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    border: 1.5px solid rgba(203, 213, 225, 0.8);
+    background: rgba(255,255,255,0.7);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+    position: relative;
+  }
+  .filter-chip:has(input:checked) {
+    border-color: #7c3aed;
+    background: rgba(237, 233, 254, 0.8);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+  }
+  .filter-chip input {
+    position: absolute; width:0; height:0; opacity:0;
+  }
+
+  /* ── Apply button ── */
+  .apply-btn {
+    background: linear-gradient(135deg, #7c3aed, #5b21b6);
+    color: white;
+    border: none;
+    padding: 9px 22px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(124,58,237,0.3);
+    transition: transform 0.15s, box-shadow 0.15s;
+    width: 100%;
+    text-align: center;
+  }
+  .apply-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(124,58,237,0.38); }
+  .apply-btn:active { transform: scale(0.97); }
+
+  /* ── Legend dot ── */
+  .legend-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.6);
+  }
+
+  /* ── Issue badge ── */
+  .issue-badge {
+    background: rgba(255, 244, 220, 0.9);
+    color: #92400e;
+    font-size: 11px;
+    padding: 2px 9px;
+    border-radius: 9999px;
+    border: 1px solid rgba(251, 191, 36, 0.3);
+  }
+
+  /* Folium full height fix */
+  #map-status, #map-network { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #map-status iframe, #map-network iframe,
+  #map-status .folium-map, #map-network .folium-map {
+    width: 100% !important;
+    height: 100% !important;
+    border: 0;
+    display: block;
+  }
+  /* Ensure leaflet controls appear above sidebar */
+  .leaflet-top, .leaflet-bottom { z-index: 400 !important; }
+</style>
+{% endblock %}
+
 {% block content %}
 
 {% if no_data %}
-<div class="flex flex-col items-center justify-center py-24 text-center">
-  <div class="w-20 h-20 rounded-2xl bg-slate-100 flex items-center justify-center mb-5">
-    <svg class="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+<div class="flex flex-col items-center justify-center py-28 text-center">
+  <div class="w-20 h-20 rounded-3xl glass-card flex items-center justify-center mb-6">
+    <svg class="w-10 h-10 text-violet-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
       <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
     </svg>
   </div>
-  <h2 class="text-xl font-semibold text-slate-800 mb-2">Belum Ada Data</h2>
+  <h2 class="text-xl font-bold text-slate-800 mb-2">Belum Ada Data</h2>
   <p class="text-slate-500 text-sm">Jalankan fetch data terlebih dahulu.</p>
 </div>
 
 {% else %}
 
-<!-- ── Header ──────────────────────────────────────────── -->
-<div class="mb-5">
-  <h1 class="text-3xl font-display font-bold text-slate-900 tracking-tight">Map View</h1>
-  <p class="mt-1 text-sm text-slate-500">Persebaran lokasi GBP berdasarkan koordinat</p>
+<!-- ── Page Title ───────────────────────────────────── -->
+<div class="mb-6">
+  <h1 class="text-2xl font-display font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
+    <span class="w-8 h-8 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg,#7c3aed,#5b21b6);">
+      <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+      </svg>
+    </span>
+    Map View
+  </h1>
+  <p class="mt-1 text-sm text-slate-500 ml-10">Persebaran lokasi GBP berdasarkan koordinat</p>
 </div>
 
-<!-- ── Summary Cards ──────────────────────────────────── -->
-<div class="grid grid-cols-3 gap-4 mb-5">
-  <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-card text-center hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 group">
-    <div class="text-3xl font-display font-bold text-slate-900 tabular-nums">{{ with_coords_count }}</div>
-    <div class="text-xs text-slate-500 mt-1 font-medium tracking-wide uppercase">Ditampilkan di Peta</div>
+<!-- ── Main Layout: Left Panel + Map ─────────────────── -->
+<div class="flex gap-5 items-start">
+
+  <!-- ────────── LEFT PANEL ────────── -->
+  <div class="w-72 shrink-0 flex flex-col gap-4">
+
+    <!-- 1. Map Mode Toggle — TOP of left panel -->
+    <div class="glass-card rounded-2xl p-4">
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Mode Tampilan</p>
+      <form method="GET" id="filter-form">
+        <input type="hidden" name="run_id" value="{{ sel_run_id }}">
+        <input type="hidden" name="mode" id="map-mode-input" value="{{ selected_mode }}">
+
+        <!-- Toggle buttons (full-width in left panel) -->
+        <div class="map-toggle-wrap flex flex-col gap-0.5 p-1 rounded-xl mb-4">
+          <button type="button" onclick="toggleMap('status')" id="btn-status"
+            class="map-toggle-btn-active w-full px-3 py-2 text-xs rounded-lg transition-all text-left flex items-center gap-2">
+            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Berdasarkan Status
+          </button>
+          <button type="button" onclick="toggleMap('network')" id="btn-network"
+            class="map-toggle-btn-inactive w-full px-3 py-2 text-xs rounded-lg transition-all text-left flex items-center gap-2">
+            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/>
+            </svg>
+            Berdasarkan Jenis Network
+          </button>
+        </div>
+
+        <!-- Filter Status -->
+        <div id="filter-status-container">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Filter Status</p>
+          <div class="flex flex-col gap-2">
+            {% for s in all_statuses %}
+            <label class="filter-chip">
+              <input type="checkbox" name="status" value="{{ s }}" {% if s in selected_statuses %}checked{% endif %}>
+              <span class="w-2.5 h-2.5 rounded-full flex-shrink-0
+                {% if s == 'Verified' %}bg-emerald-500
+                {% elif s == 'Duplicate' %}bg-amber-500
+                {% elif s == 'Suspended' %}bg-red-500
+                {% else %}bg-slate-400{% endif %}"></span>
+              <span class="{% if s == 'Verified' %}text-emerald-700
+                           {% elif s == 'Duplicate' %}text-amber-700
+                           {% elif s == 'Suspended' %}text-red-700
+                           {% else %}text-slate-600{% endif %}">{{ s }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <button type="submit" class="apply-btn mt-4">Terapkan Filter</button>
+        </div>
+
+        <!-- Filter Network -->
+        <div id="filter-network-container" style="display:none;">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Filter Network</p>
+          <div class="flex flex-col gap-2">
+            {% for net, color, text_color in network_filters %}
+            <label class="filter-chip">
+              <input type="checkbox" name="network" value="{{ net }}" {% if net in selected_networks %}checked{% endif %}>
+              <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: {{ color }};"></span>
+              <span class="{{ text_color }}">{{ net }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <button type="submit" class="apply-btn mt-4">Terapkan Filter</button>
+        </div>
+
+      </form>
+    </div>
+
+    <!-- 2. Stat Cards -->
+    <div class="glass-card rounded-2xl p-4">
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Statistik Peta</p>
+      <div class="flex flex-col gap-3">
+
+        <div class="stat-pill rounded-xl px-4 py-3 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);">
+            <svg class="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/>
+            </svg>
+          </div>
+          <div>
+            <div class="text-2xl font-bold text-slate-800 tabular-nums leading-tight">{{ with_coords_count }}</div>
+            <div class="text-xs text-slate-500 font-medium">Ditampilkan di Peta</div>
+          </div>
+        </div>
+
+        <div class="stat-pill rounded-xl px-4 py-3 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:linear-gradient(135deg,#fef3c7,#fde68a);">
+            <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+            </svg>
+          </div>
+          <div>
+            <div class="text-2xl font-bold text-amber-500 tabular-nums leading-tight">{{ without_coords_count }}</div>
+            <div class="text-xs text-slate-500 font-medium">Tanpa Koordinat</div>
+          </div>
+        </div>
+
+        <div class="stat-pill rounded-xl px-4 py-3 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:linear-gradient(135deg,#ede9fe,#ddd6fe);">
+            <svg class="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 7h18M3 12h18M3 17h18"/>
+            </svg>
+          </div>
+          <div>
+            <div class="text-2xl font-bold text-violet-600 tabular-nums leading-tight">{{ total_count }}</div>
+            <div class="text-xs text-slate-500 font-medium">Total Filtered</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 3. Legend -->
+    <div class="glass-card rounded-2xl p-4" id="legend-status-panel">
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Legenda Status</p>
+      <div class="flex flex-col gap-2.5">
+        <div class="flex items-center gap-2.5 text-sm text-slate-700"><span class="legend-dot" style="background:#22c55e;"></span>Verified</div>
+        <div class="flex items-center gap-2.5 text-sm text-slate-700"><span class="legend-dot" style="background:#f59e0b;"></span>Duplicate</div>
+        <div class="flex items-center gap-2.5 text-sm text-slate-700"><span class="legend-dot" style="background:#ef4444;"></span>Suspended</div>
+        <div class="flex items-center gap-2.5 text-sm text-slate-700"><span class="legend-dot" style="background:#94a3b8;"></span>Need Verification</div>
+      </div>
+    </div>
+
+    <div class="glass-card rounded-2xl p-4" id="legend-network-panel" style="display:none;">
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Legenda Network</p>
+      <div class="flex flex-col gap-2.5">
+        <div class="flex items-center gap-2.5 text-sm text-slate-700"><span class="legend-dot" style="background:#3b82f6;"></span>Cabang</div>
+        <div class="flex items-center gap-2.5 text-sm text-slate-700"><span class="legend-dot" style="background:#8b5cf6;"></span>Pos</div>
+        <div class="flex items-center gap-2.5 text-sm text-slate-700"><span class="legend-dot" style="background:#f97316;"></span>Kios / Subkios</div>
+        <div class="flex items-center gap-2.5 text-sm text-slate-700"><span class="legend-dot" style="background:#94a3b8;"></span>Lainnya</div>
+      </div>
+    </div>
+
   </div>
-  <div class="bg-white rounded-2xl border border-amber-100 p-4 shadow-card text-center hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 group">
-    <div class="text-3xl font-display font-bold text-amber-500 tabular-nums">{{ without_coords_count }}</div>
-    <div class="text-xs text-amber-500 mt-1 font-medium tracking-wide uppercase">Tanpa Koordinat</div>
+
+  <!-- ────────── RIGHT: MAP GLOBE AREA ────────── -->
+  <div class="flex-1 min-w-0">
+
+    {% if map_html %}
+    <!-- Flat Map Card -->
+    <div class="glass-card rounded-2xl overflow-hidden" style="height:620px; position: relative;">
+      <!-- Map containers -->
+      <div style="position: relative; width: 100%; height: 100%;">
+        <div id="map-status" style="position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1;">
+          {{ map_html|safe }}
+        </div>
+        <div id="map-network" style="position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; z-index: -1;">
+          {{ map_network_html|safe }}
+        </div>
+      </div>
+    </div>
+
+    {% else %}
+    <div class="glass-card rounded-2xl flex flex-col items-center justify-center text-center" style="height:620px;">
+      <div class="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style="background:linear-gradient(135deg,#ede9fe,#ddd6fe);">
+        <svg class="w-7 h-7 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+        </svg>
+      </div>
+      <p class="text-sm font-semibold text-slate-600">Tidak ada lokasi dengan koordinat valid</p>
+      <p class="text-xs text-slate-400 mt-1">{{ without_coords_count }} lokasi tidak memiliki koordinat</p>
+    </div>
+    {% endif %}
+
   </div>
-  <div class="bg-white rounded-2xl border border-primary/20 p-4 shadow-card text-center hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 group">
-    <div class="text-3xl font-display font-bold text-primary tabular-nums">{{ total_count }}</div>
-    <div class="text-xs text-primary/80 mt-1 font-medium tracking-wide uppercase">Total Filtered</div>
-  </div>
 </div>
 
-<!-- ── Status Filter ──────────────────────────────────── -->
-<form method="GET" class="bg-white rounded-2xl border border-gray-200 shadow-card p-4 mb-5 flex flex-wrap items-center gap-4">
-  <input type="hidden" name="run_id" value="{{ sel_run_id }}">
-  <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Filter Status:</span>
-  {% for s in all_statuses %}
-  <label class="flex items-center gap-1.5 cursor-pointer text-sm">
-    <input type="checkbox" name="status" value="{{ s }}"
-           {% if s in selected_statuses %}checked{% endif %}
-           class="w-3.5 h-3.5 rounded accent-accent">
-    <span class="{% if s == 'Verified' %}text-emerald-600
-                 {% elif s == 'Duplicate' %}text-amber-600
-                 {% elif s == 'Suspended' %}text-accent
-                 {% else %}text-slate-600{% endif %} text-xs font-medium">{{ s }}</span>
-  </label>
-  {% endfor %}
-  <button type="submit"
-          class="ml-auto px-4 py-1.5 rounded-xl text-sm font-medium text-white bg-primary hover:bg-primary-700 shadow-md shadow-primary/20 hover:shadow-lg hover:-translate-y-0.5 active:scale-95 transition-all">
-    Terapkan
-  </button>
-</form>
-
-<!-- ── Map ────────────────────────────────────────────── -->
-{% if map_html %}
-<div class="bg-white rounded-2xl border border-gray-200 shadow-card overflow-hidden" style="height: 540px;">
-  {{ map_html|safe }}
-</div>
-{% else %}
-<div class="bg-white rounded-2xl border border-gray-200 shadow-card flex flex-col items-center justify-center py-20 text-center">
-  <svg class="w-12 h-12 text-slate-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
-  </svg>
-  <p class="text-sm font-medium text-slate-500">Tidak ada lokasi dengan koordinat valid</p>
-  <p class="text-xs text-slate-400 mt-1">Total {{ without_coords_count }} lokasi tidak memiliki koordinat</p>
-</div>
-{% endif %}
-
-<!-- ── Koordinat Bermasalah ───────────────────────────── -->
+<!-- ── Masalah Koordinat — FULL WIDTH (di luar kolom) ─── -->
 {% if coord_issues %}
-<div class="bg-white rounded-2xl border border-amber-200 shadow-card mt-5">
-  <div class="px-5 py-4 border-b border-amber-100 flex items-center gap-2">
-    <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
-    </svg>
-    <h3 class="text-sm font-semibold text-amber-800">Masalah Koordinat ({{ coord_issues|length }})</h3>
+<div class="glass-card rounded-2xl overflow-hidden mt-5">
+  <div class="px-5 py-4 flex items-center gap-2 border-b border-amber-100/60">
+    <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:rgba(251,191,36,0.15);">
+      <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+      </svg>
+    </div>
+    <h3 class="text-sm font-semibold text-slate-700">Masalah Koordinat</h3>
+    <span class="ml-1 issue-badge">{{ coord_issues|length }} lokasi</span>
   </div>
   <div class="overflow-x-auto">
     <table class="w-full text-sm">
       <thead>
-        <tr class="border-b border-amber-50">
-          <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Store Code</th>
-          <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Nama Bisnis</th>
-          <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Masalah</th>
+        <tr class="border-b border-slate-100">
+          <th class="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Store Code</th>
+          <th class="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Nama Bisnis</th>
+          <th class="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Alamat</th>
+          <th class="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Status Masalah</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-amber-50">
+      <tbody class="divide-y divide-slate-50">
         {% for s in coord_issues %}
-        <tr class="hover:bg-amber-50/40">
-          <td class="px-5 py-3 font-mono text-xs text-slate-500">{{ s.store_code|default:"—" }}</td>
+        <tr class="hover:bg-violet-50/30 transition-colors">
+          <td class="px-5 py-3 font-mono text-xs text-slate-400">{{ s.store_code|default:"—" }}</td>
           <td class="px-5 py-3 font-medium text-slate-700">{{ s.business_name|default:"—" }}</td>
+          <td class="px-5 py-3 text-xs text-slate-500">{{ s.address|default:"—"|truncatechars:60 }}</td>
           <td class="px-5 py-3">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-amber-100 text-amber-800">
-              {{ s.coord_status|default:"UNKNOWN" }}
-            </span>
+            <span class="issue-badge">{{ s.coord_status|default:"UNKNOWN" }}</span>
           </td>
         </tr>
         {% endfor %}
@@ -116,12 +356,46 @@
 </div>
 {% endif %}
 
-{% endif %}
-{% endblock %}
 
-{% block extra_head %}
-<style>
-  /* Fix Folium map height */
-  #map_id, .folium-map { height: 100% !important; width: 100% !important; }
-</style>
+<script>
+function toggleMap(mode) {
+  const btnStatus   = document.getElementById('btn-status');
+  const btnNetwork  = document.getElementById('btn-network');
+  const mapStatus   = document.getElementById('map-status');
+  const mapNetwork  = document.getElementById('map-network');
+  const fStatus     = document.getElementById('filter-status-container');
+  const fNetwork    = document.getElementById('filter-network-container');
+  const lStatus     = document.getElementById('legend-status-panel');
+  const lNetwork    = document.getElementById('legend-network-panel');
+  const modeInput   = document.getElementById('map-mode-input');
+
+  if (modeInput) modeInput.value = mode;
+
+  if (mode === 'status') {
+    btnStatus.className  = 'map-toggle-btn-active w-full px-3 py-2 text-xs rounded-lg transition-all text-left flex items-center gap-2';
+    btnNetwork.className = 'map-toggle-btn-inactive w-full px-3 py-2 text-xs rounded-lg transition-all text-left flex items-center gap-2';
+    mapStatus.style.cssText  = 'position:relative; opacity:1; pointer-events:auto; z-index:1;';
+    mapNetwork.style.cssText = 'position:absolute; opacity:0; pointer-events:none; z-index:-1;';
+    fStatus.style.display  = 'block';
+    fNetwork.style.display = 'none';
+    if (lStatus)  lStatus.style.display  = 'block';
+    if (lNetwork) lNetwork.style.display = 'none';
+  } else {
+    btnNetwork.className = 'map-toggle-btn-active w-full px-3 py-2 text-xs rounded-lg transition-all text-left flex items-center gap-2';
+    btnStatus.className  = 'map-toggle-btn-inactive w-full px-3 py-2 text-xs rounded-lg transition-all text-left flex items-center gap-2';
+    mapNetwork.style.cssText = 'position:relative; opacity:1; pointer-events:auto; z-index:1;';
+    mapStatus.style.cssText  = 'position:absolute; opacity:0; pointer-events:none; z-index:-1;';
+    fNetwork.style.display = 'block';
+    fStatus.style.display  = 'none';
+    if (lNetwork) lNetwork.style.display = 'block';
+    if (lStatus)  lStatus.style.display  = 'none';
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  toggleMap('{{ selected_mode }}' || 'status');
+});
+</script>
+
+{% endif %}
 {% endblock %}

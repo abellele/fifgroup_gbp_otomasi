@@ -5,7 +5,7 @@
 <span class="text-slate-500">Dashboard</span>
 <span class="text-slate-300 mx-1">/</span>
 <a href="{% url 'gbp:data_table' %}{% if sel_run_id %}?run_id={{ sel_run_id }}{% endif %}"
-   class="text-slate-500 hover:text-[#E20820] transition-colors">Data Table</a>
+  class="text-slate-500 hover:text-[#E20820] transition-colors">Data Table</a>
 <span class="text-slate-300 mx-1">/</span>
 <span class="text-slate-700 font-medium">Detail Lokasi</span>
 {% endblock %}
@@ -13,9 +13,9 @@
 {% block content %}
 <div class="mb-5 flex items-center gap-3">
   <a href="{% url 'gbp:data_table' %}{% if sel_run_id %}?run_id={{ sel_run_id }}{% endif %}"
-     class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors">
+    class="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+      <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
     </svg>
     Kembali ke Data Table
   </a>
@@ -117,22 +117,19 @@
       <h2 class="text-sm font-semibold text-slate-800 mb-3">Aksi</h2>
       <div class="space-y-2">
         {% if snapshot.maps_uri %}
-        <a href="{{ snapshot.maps_uri }}" target="_blank" rel="noopener noreferrer"
-           id="btn-open-maps"
-           class="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl text-sm font-medium
-                  text-white transition-all hover:opacity-90"
-           style="background:#E20820">
+        <a href="{{ snapshot.maps_uri }}" target="_blank" rel="noopener noreferrer" id="btn-open-maps" class="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl text-sm font-medium
+                  text-white transition-all hover:opacity-90" style="background:#E20820">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
           </svg>
           Buka Google Maps
         </a>
         {% endif %}
-        <a href="{% url 'gbp:data_table' %}{% if sel_run_id %}?run_id={{ sel_run_id }}{% endif %}"
-           class="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl text-sm font-medium
+        <a href="{% url 'gbp:data_table' %}{% if sel_run_id %}?run_id={{ sel_run_id }}{% endif %}" class="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl text-sm font-medium
                   text-slate-600 border border-gray-200 hover:bg-gray-50 transition-all">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
           Kembali ke Tabel
         </a>

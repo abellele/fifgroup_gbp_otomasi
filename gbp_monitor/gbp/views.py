@@ -29,7 +29,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
 from gbp.forms import DataTableFilterForm, UpdateStatusForm
-from gbp.models import FetchRun, LocationSnapshot, ReconciliationJob, ReconciliationResult
+from gbp.models import FetchRun, LocationSnapshot, MasterLocation, ReconciliationJob, ReconciliationResult
 from gbp.services import export_service, history_service, reconciliation_service, dashboard_service
 from gbp.utils import ALL_STATUSES, PAGE_SIZE, STATUS_META, get_status_meta
 
@@ -176,13 +176,48 @@ class MapView(View):
             return render(request, self.template_name, {**ctx, "no_data": True})
 
         run_id = ctx["sel_run_id"]
-        statuses = request.GET.getlist("status") or ALL_STATUSES
+        # Ambil mode peta yang sedang aktif (status atau network)
+        selected_mode = request.GET.get("mode", "status")
+
+        # Logika Filter Eksklusif:
+        # Jika mode status, terapkan filter status saja (semua network muncul)
+        # Jika mode network, terapkan filter network saja (semua status muncul)
+        ALL_NETWORKS = ["Cabang", "Pos", "Kios/Subkios", "Lainnya"]
+        if selected_mode == "status":
+            statuses = request.GET.getlist("status") or ALL_STATUSES
+            networks = ALL_NETWORKS
+        else:
+            statuses = ALL_STATUSES
+            networks = request.GET.getlist("network") or ALL_NETWORKS
+
         snapshots = history_service.get_snapshots(run_id=run_id, status_filter=statuses)
 
         with_coords = [
             s for s in snapshots
             if s.get("latitude") is not None and s.get("longitude") is not None
         ]
+        
+        # -- Persiapkan Data Network dari Master Data --
+        # Kita pasang tipe network sekarang karena dipakai untuk filter & peta
+        store_codes = [s["store_code"] for s in with_coords if s.get("store_code")]
+        master_qs = MasterLocation.objects.filter(store_code__in=store_codes).values_list("store_code", "network")
+        
+        def normalize_network(net_type):
+            if not net_type: return "Lainnya"
+            nl = net_type.lower()
+            if "cabang" in nl: return "Cabang"
+            if "pos" in nl: return "Pos"
+            if "kios" in nl or "subkios" in nl: return "Kios/Subkios"
+            return "Lainnya"
+            
+        network_map = {sc: normalize_network(net) for sc, net in master_qs}
+
+        for s in with_coords:
+            s["network_type"] = network_map.get(s["store_code"], "Lainnya")
+
+        # Terapkan filter network
+        with_coords = [s for s in with_coords if s["network_type"] in networks]
+
         without_coords = len(snapshots) - len(with_coords)
 
         # Koordinat bermasalah
@@ -192,11 +227,18 @@ class MapView(View):
         ]
 
         map_html = ""
+        map_network_html = ""
         if with_coords:
             import folium
+
+            # Center map
             lats = [s["latitude"] for s in with_coords]
             lngs = [s["longitude"] for s in with_coords]
             center = [sum(lats) / len(lats), sum(lngs) / len(lngs)]
+
+            # ==========================================
+            # PETA 1: BERDASARKAN STATUS VERIFIKASI
+            # ==========================================
             m = folium.Map(location=center, zoom_start=6, tiles="CartoDB positron")
 
             STATUS_COLORS = {
@@ -234,7 +276,7 @@ class MapView(View):
             <div style="position:fixed;bottom:30px;left:30px;z-index:9999;
                         background:white;padding:14px 18px;border-radius:12px;
                         box-shadow:0 4px 16px rgba(0,0,0,0.12);font-family:Inter,sans-serif;font-size:13px">
-                <b style="display:block;margin-bottom:8px;color:#1e293b">Status</b>
+                <b style="display:block;margin-bottom:8px;color:#1e293b">Status Verifikasi</b>
                 <div style="margin-bottom:4px"><span style="color:#22c55e;font-size:18px">●</span> <span>Verified</span></div>
                 <div style="margin-bottom:4px"><span style="color:#f59e0b;font-size:18px">●</span> <span>Duplicate</span></div>
                 <div style="margin-bottom:4px"><span style="color:#ef4444;font-size:18px">●</span> <span>Suspended</span></div>
@@ -244,12 +286,71 @@ class MapView(View):
             m.get_root().html.add_child(folium.Element(legend_html))
             map_html = m.get_root().render()
 
+            # ==========================================
+            # PETA 2: BERDASARKAN JENIS NETWORK
+            # ==========================================
+            m_network = folium.Map(location=center, zoom_start=6, tiles="CartoDB positron")
+
+            def get_network_color(net_type):
+                if net_type == "Cabang": return "#3b82f6" # Biru
+                if net_type == "Pos": return "#8b5cf6" # Ungu
+                if net_type == "Kios/Subkios": return "#f97316" # Jingga
+                return "#94a3b8" # Abu-abu (Unknown/Lainnya)
+
+            for s in with_coords:
+                net_type = s["network_type"]
+                net_color = get_network_color(net_type)
+                popup_html = f"""
+                <div style="font-family:Inter,sans-serif;min-width:240px;font-size:13px;padding:4px">
+                    <b style="font-size:14px">{s['business_name'] or '—'}</b><br>
+                    <span style="color:#666;font-size:12px">{s['store_code'] or '—'}</span>
+                    <hr style="margin:6px 0;border-color:#eee">
+                    <div>📍 {s['address'] or '—'}</div>
+                    <div style="color:#555;font-size:11px">🌐 {s.get('latitude', ''):.6f}, {s.get('longitude', ''):.6f}</div>
+                    <hr style="margin:6px 0;border-color:#eee">
+                    <span style="background:{net_color};color:white;padding:2px 8px;border-radius:9999px;font-size:11px">{net_type}</span>
+                </div>
+                """
+                folium.CircleMarker(
+                    location=[s["latitude"], s["longitude"]],
+                    radius=7,
+                    color=net_color,
+                    fill=True,
+                    fill_color=net_color,
+                    fill_opacity=0.75,
+                    popup=folium.Popup(popup_html, max_width=300),
+                    tooltip=f"{s['business_name'] or s['store_code']} — {net_type}",
+                ).add_to(m_network)
+
+            legend_network_html = """
+            <div style="position:fixed;bottom:30px;left:30px;z-index:9999;
+                        background:white;padding:14px 18px;border-radius:12px;
+                        box-shadow:0 4px 16px rgba(0,0,0,0.12);font-family:Inter,sans-serif;font-size:13px">
+                <b style="display:block;margin-bottom:8px;color:#1e293b">Jenis Network</b>
+                <div style="margin-bottom:4px"><span style="color:#3b82f6;font-size:18px">●</span> <span>Cabang</span></div>
+                <div style="margin-bottom:4px"><span style="color:#8b5cf6;font-size:18px">●</span> <span>Pos</span></div>
+                <div style="margin-bottom:4px"><span style="color:#f97316;font-size:18px">●</span> <span>Kios / Subkios</span></div>
+                <div><span style="color:#94a3b8;font-size:18px">●</span> <span>Lainnya / Unknown</span></div>
+            </div>
+            """
+            m_network.get_root().html.add_child(folium.Element(legend_network_html))
+            map_network_html = m_network.get_root().render()
+
         ctx.update({
             "map_html": map_html,
+            "map_network_html": map_network_html,
             "with_coords_count": len(with_coords),
             "without_coords_count": without_coords,
             "total_count": len(snapshots),
             "selected_statuses": statuses,
+            "selected_networks": networks,
+            "selected_mode": selected_mode,
+            "network_filters": [
+                ("Cabang", "#3b82f6", "text-blue-600"),
+                ("Pos", "#8b5cf6", "text-purple-600"),
+                ("Kios/Subkios", "#f97316", "text-orange-600"),
+                ("Lainnya", "#94a3b8", "text-slate-600"),
+            ],
             "coord_issues": coord_issues,
         })
         return render(request, self.template_name, ctx)
@@ -526,8 +627,11 @@ class DownloadReconDetailView(View):
                     snap = LocationSnapshot.objects.filter(business_name=r.identifier_value).order_by("-created_at").first()
 
             latlong_str = ""
+            maps_uri_str = ""
             if snap and snap.latitude is not None and snap.longitude is not None:
                 latlong_str = f"{snap.latitude},{snap.longitude}"
+            if snap and snap.maps_uri:
+                maps_uri_str = snap.maps_uri
 
             # Penyesuaian retroaktif untuk file CSV lama:
             # Jika old_status = "Need Reverification" dan new_status = "Need Verification"
@@ -548,6 +652,7 @@ class DownloadReconDetailView(View):
                 "Status Baru": new_s or "—",
                 "Status Berubah": "Ya" if is_changed else "Tidak",
                 "Latlong": latlong_str,
+                "URL Maps": maps_uri_str,
                 "Catatan": catatan,
             })
 

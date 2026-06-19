@@ -17,6 +17,7 @@ EXPORT_COLUMNS = {
     "address": "Alamat",
     "latitude": "Latitude",
     "longitude": "Longitude",
+    "maps_uri": "URL Maps",
     "status": "Status",
     "fetched_at": "Diperbarui",
 }

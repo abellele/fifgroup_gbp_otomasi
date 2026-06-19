@@ -165,6 +165,22 @@ Rekonsiliasi membandingkan **Master Data Kios** dengan data **GBP API**:
 * Jika kode identik, sistem memperbarui status verifikasi internal mengikuti status aktual Google.
 * Jika kode kosong atau kode ganda (duplicate identifier di data Anda), sistem akan menandai baris tersebut sebagai `Manual Review` atau `Invalid` agar tidak merusak database.
 
+### 4. Penyimpanan Data (Storage & Database)
+Data history untuk chart dan fitur dashboard disimpan menggunakan sistem database rasional via **Django ORM** (pada Opsi A).
+* **Database Default**: Secara default (saat pengembangan/development), sistem menggunakan **SQLite** (tersimpan di file `gbp_monitor/db.sqlite3`). File ini menyimpan seluruh history fetching data API dan Master Data Anda.
+* **Database Production**: Untuk skala produksi, aplikasi ini sudah dikonfigurasi untuk terhubung langsung ke **Supabase (PostgreSQL)** cukup dengan mengubah `DATABASE_URL` di dalam file `.env`.
+* **Struktur Penyimpanan Utama**:
+  1. `MasterLocation`: Menyimpan tabel data master outlet Anda (Area, Network, Alamat, dll).
+  2. `FetchRun`: Menyimpan history waktu setiap kali Anda menarik data dari Google.
+  3. `LocationSnapshot`: Menyimpan setiap baris data lokasi spesifik pada waktu/run tertentu (berisi Status, Latitude, Longitude, dsb).
+
+### 5. Pemetaan & Filter Ganda (Dual-Filter Map View)
+Sistem memiliki modul Peta Interaktif (*Map View*) yang dirender menggunakan library *Folium* secara dinamis, dilengkapi dengan filter eksklusif:
+* **Mode Status**: Menampilkan penyebaran lokasi dan filter checkbox murni berdasarkan status verifikasi Google (Verified, Need Verification, Suspended, dll).
+* **Mode Jenis Network**: Menampilkan penyebaran lokasi dengan pewarnaan dan filter checkbox berdasarkan jenis/kategori infrastruktur jaringan operasional (Cabang, Pos, Kios/Subkios, Lainnya).
+* Sistem melakukan pencarian silang otomatis (lookup) dari data Google API terhadap *Master Data* untuk mengetahui *Network* masing-masing lokasi.
+* Filter UI dirancang eksklusif, artinya jika pengguna sedang berada di Mode Status, sistem secara cerdas hanya akan menerapkan filter status (mengabaikan input filter tipe network), dan sebaliknya.
+
 ---
 
 ## 🛠️ TROUBLESHOOTING UMUM
