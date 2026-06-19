@@ -1,230 +1,180 @@
-# GBP Verification Status — Setup & Panduan Lengkap
+# GBP Verification Monitor — Panduan Utama Project (Monorepo)
 
-Toolset ini mengambil status verifikasi dari **Google Business Profile API** 
-secara otomatis dan melakukan lookup ke database kios yang sudah ada.
+Project ini berisi solusi pemantauan status verifikasi **Google Business Profile (GBP)** di seluruh jaringan outlet/kios FIFGROUP. Toolset ini membantu memetakan lokasi, mendeteksi masalah koordinat, dan mencocokkan (rekonsiliasi) data internal perusahaan dengan data aktual di Google Maps.
+
+Repository ini bertipe monorepo yang memuat **dua arsitektur alternatif**:
+1. **Opsi A: Django Web Dashboard (`gbp_monitor/`)** — Aplikasi web lengkap dengan UI modern (Tailwind CSS), visualisasi peta interaktif, manajemen status, dan integrasi database awan **Supabase PostgreSQL**.
+2. **Opsi B: Standalone Scripts & Streamlit Dashboard (Root Directory)** — Skrip otomasi CLI ringan berbasis scheduler lokal dan dashboard interaktif **Streamlit** menggunakan database **SQLite**.
 
 ---
 
-## Struktur File
+## 🗺️ Gambaran Umum Arsitektur & Struktur File
 
-```
-gbp_verification/
+```text
+gmb_otomasi/ (Root)
 │
-├── fetch_status.py      → Ambil data dari GBP API → simpan ke CSV
-├── update_database.py   → Lookup CSV hasil ke database kios
-├── scheduler.py         → Jalankan keduanya otomatis setiap hari
-├── requirements.txt     → Library yang dibutuhkan
+├── gbp_monitor/               ← [OPSI A] FOLDER UTAMA DJANGO WEB DASHBOARD (Direkomendasikan)
+│   ├── manage.py              
+│   ├── gbp/                   ← Django App (Models, Views, Tailwind templates)
+│   │   ├── services/          ← Logika bisnis utama (Reconciliation, API, Export)
+│   │   └── management/        ← Command otomasi Django (fetch_gbp_status, run_gbp_pipeline)
+│   └── gbp_monitor/           ← Konfigurasi setting Django (terintegrasi Supabase)
 │
-├── credentials.json     ← Kamu download dari Google Cloud Console (langkah 3)
-├── token.json           ← Dibuat otomatis saat login pertama kali
+├── fetch_status.py            ← [OPSI B] CLI untuk fetch GBP API → simpan ke SQLite/CSV
+├── update_database.py         ← [OPSI B] CLI lookup/update data internal dengan hasil fetch
+├── scheduler.py               ← [OPSI B] Scheduler berkala untuk fetch_status & update_database
+├── dashboard.py               ← [OPSI B] Dashboard interaktif berbasis Streamlit
+├── history_db.py              ← [OPSI B] Utilitas SQLite lokal (gbp_history.db)
 │
-├── gbp_status_YYYYMMDD.csv   ← Hasil harian fetch
-├── logs/                     ← Log otomatis per hari
-└── report_*.txt              ← Laporan singkat per run
+├── credentials.json           ← OAuth 2.0 Credentials dari Google Cloud Console (Dibuat Manual)
+├── token.json                 ← Google API Access Token (Terbuat otomatis setelah Login pertama)
+└── requirements.txt           ← Library Python untuk script root (Opsi B)
 ```
 
 ---
 
-## LANGKAH 1 — Buat Google Cloud Project
+## 🔐 KONFIGURASI GOOGLE BUSINESS PROFILE API (Wajib untuk Opsi A & B)
 
-1. Buka https://console.cloud.google.com
-2. Klik **"New Project"** → beri nama (contoh: `gbp-fifgroup`)
-3. Pastikan project baru ini sudah dipilih (pojok kiri atas)
+Kedua opsi membutuhkan otorisasi ke Google API. Ikuti langkah berikut untuk menyiapkannya:
 
----
+### 1. Buat Google Cloud Project
+1. Buka [Google Cloud Console](https://console.cloud.google.com).
+2. Klik **"New Project"** → beri nama (contoh: `gbp-fifgroup-monitor`).
+3. Pilih project tersebut.
 
-## LANGKAH 2 — Aktifkan Business Profile APIs
+### 2. Aktifkan API yang Dibutuhkan
+Buka **APIs & Services → Library**, cari dan aktifkan ketiga API berikut:
+* `Business Profile Account Management API`
+* `My Business Business Information API`
+* `My Business Verifications API`
 
-Di Google Cloud Console, buka **APIs & Services → Library**, 
-cari dan aktifkan **ketiga API** berikut:
+> ⚠️ **PENTING:** Business Profile API adalah *Restricted API*. Akun Anda harus mendapatkan persetujuan akses (approval) dari Google agar bisa menarik data production. 
+> Ajukan akses di: [Google Developers GBP Prereqs](https://developers.google.com/my-business/content/prereqs). Proses persetujuan memakan waktu **3–7 hari kerja**.
 
-| API | Nama di Library |
-|-----|----------------|
-| Account Management | `Business Profile Account Management API` |
-| Business Information | `My Business Business Information API` |
-| Verifications | `My Business Verifications API` |
-
-Klik **"Enable"** untuk masing-masing.
-
-> ⚠️ **PENTING:** Business Profile API adalah **restricted API**.
-> Google memerlukan approval sebelum bisa digunakan untuk akun production.
-> Ajukan akses di: https://developers.google.com/my-business/content/prereqs
-> Proses approval biasanya **3–7 hari kerja**.
-
----
-
-## LANGKAH 3 — Buat OAuth 2.0 Credentials
-
-Sebelum membuat client ID, Google biasanya akan meminta kamu menyiapkan **OAuth consent screen** dulu.
-
-1. Di Google Cloud Console → **APIs & Services → OAuth consent screen**
-2. Pilih tipe **External** jika ini untuk akun pribadi / testing
-3. Isi **App name**, **User support email**, dan **Developer contact information**
-4. Jika diminta, tambahkan akun Google kamu ke daftar **Test users**
-5. Simpan perubahan
-
-Setelah consent screen selesai, lanjut ke pembuatan credential:
-
-1. Di Google Cloud Console → **APIs & Services → Credentials**
-2. Klik **"Create Credentials" → "OAuth 2.0 Client ID"**
-3. Pilih **Application type: Desktop app**
-4. Beri nama (contoh: `gbp-script`)
-5. Klik **Download JSON**
-6. Rename file yang didownload menjadi **`credentials.json`**
-7. Letakkan di folder yang sama dengan script ini
+### 3. Buat OAuth 2.0 Client ID
+1. Buka **APIs & Services → OAuth consent screen**.
+2. Set tipe ke **External** (jika untuk testing/akun non-organisasi) atau **Internal** (jika menggunakan Google Workspace perusahaan).
+3. Lengkapi data wajib, pastikan masukkan email Anda pada bagian **Test Users** agar bisa login saat masa pengembangan.
+4. Buka **APIs & Services → Credentials** → Klik **"Create Credentials"** → **"OAuth 2.0 Client ID"**.
+5. Pilih Application Type: **Desktop App**.
+6. Klik **Download JSON**, ganti nama file tersebut menjadi **`credentials.json`**.
+7. Salin file `credentials.json` ke folder root (untuk Opsi B) dan/atau folder `gbp_monitor/data/` (untuk Opsi A).
 
 ---
 
-## LANGKAH 4 — Install Python Dependencies
+## 🚀 OPSI A: DJANGO WEB DASHBOARD (`gbp_monitor`)
+Aplikasi web berbasis Django 4.x yang terhubung ke cloud database Supabase.
 
-```bash
-# Pastikan Python 3.9+ sudah terinstall
-# Untuk Python 3.13, pakai pin dependency yang sudah disesuaikan di requirements ini
-python --version
+### Fitur Utama Opsi A:
+* **UI/UX Premium**: Dibangun dengan Tailwind CSS, responsif, dan dinamis.
+* **Database Persisten**: Menggunakan PostgreSQL (Supabase) via `dj-database-url` sehingga riwayat run tersimpan aman di cloud.
+* **Visualisasi Kaya**: Chart tren verifikasi (Chart.js), pemetaan koordinat (Folium Map), dan kartu rangkuman risiko.
+* **UI Update Status**: Lakukan tarik data API dan pencocokan CSV langsung dari browser.
 
-# Install semua library
-pip install -r requirements.txt
-```
-
----
-
-## LANGKAH 5 — Login Pertama Kali (OAuth)
-
-```bash
-python fetch_status.py
-```
-
-Saat pertama kali dijalankan:
-- Browser akan terbuka otomatis
-- Login dengan akun Google yang jadi **admin di Business Profile Manager**
-- Izinkan akses → browser akan redirect ke localhost
-- Token disimpan otomatis ke `token.json` (tidak perlu login lagi ke depannya)
-
----
-
-## LANGKAH 6 — Jalankan Fetch Status
-
-```bash
-# Fetch semua lokasi dari semua akun
-python fetch_status.py
-
-# Atau dengan output file custom
-python fetch_status.py --output hasil_verifikasi.csv
-
-# Atau spesifik satu akun
-python fetch_status.py --account-id accounts/123456789
-```
-
-Hasilnya: file CSV dengan kolom:
-
-| Kolom | Keterangan |
-|-------|-----------|
-| `location_name` | ID internal GBP |
-| `store_code` | Kode kios (untuk lookup ke DB) |
-| `business_name` | Nama bisnis di GBP |
-| `address` | Alamat lengkap |
-| `status` | `Verified` / `Verification Required` / `Duplicate` |
-| `has_vom` | True jika sudah punya Voice of Merchant |
-| `is_duplicate` | True jika terdeteksi duplikat |
-| `has_pending_edits` | True jika ada edit yang belum disimpan |
-| `maps_uri` | Link ke Google Maps |
-| `fetched_at` | Waktu pengambilan data |
+### Cara Menjalankan Opsi A:
+1. Masuk ke direktori:
+   ```bash
+   cd gbp_monitor
+   ```
+2. Buat virtual environment & aktifkan:
+   ```bash
+   python -m venv .venv
+   # Windows:
+   .venv\Scripts\activate
+   # Linux/macOS:
+   source .venv/bin/activate
+   ```
+3. Install dependensi Python & Node.js:
+   ```bash
+   pip install -r requirements.txt
+   npm install
+   ```
+4. Salin `.env.example` ke `.env` dan konfigurasikan database Supabase serta file path Google credential Anda.
+5. Jalankan autentikasi pertama kali:
+   ```bash
+   python manage.py fetch_gbp_status
+   ```
+   *(Browser akan terbuka untuk meminta izin akun Google Anda. Setelah selesai, file `token.json` akan dibuat otomatis di folder `data/`)*
+6. Build Tailwind CSS & Jalankan migrasi:
+   ```bash
+   npm run build:css
+   python manage.py migrate
+   ```
+7. Jalankan Server:
+   ```bash
+   python manage.py runserver
+   ```
+   Akses di [http://localhost:8000](http://localhost:8000).
 
 ---
 
-## LANGKAH 7 — Update Database Kios
+## ⚡ OPSI B: STANDALONE SCRIPTS & STREAMLIT DASHBOARD (Root)
+Solusi otomasi lokal berbasis skrip CLI Python dan visualisasi antarmuka Streamlit.
 
-### Jika database kamu berupa CSV:
+### Fitur Utama Opsi B:
+* **Ringan**: Cocok dipasang di server lokal atau komputer scheduler tanpa server web penuh.
+* **Otomasi CLI**: Skrip bisa dijadwalkan langsung lewat Windows Task Scheduler atau Linux Cron.
+* **Streamlit UI**: Visualisasi cepat menggunakan dashboard streamlit.
 
-```bash
-python update_database.py \
-    --gbp-file gbp_status_20260511.csv \
-    --db-file database_kios.csv \
-    --mode csv \
-    --db-key-col kode_kios
-```
-
-### Jika database kamu berupa SQLite:
-
-```bash
-python update_database.py \
-    --gbp-file gbp_status_20260511.csv \
-    --db-file kios.db \
-    --mode sqlite \
-    --table kios \
-    --db-key-col kode_kios
-```
-
-Script akan otomatis:
-- Membuat backup database sebelum update
-- Menambah kolom `gbp_status` dan `gbp_fetched_at` jika belum ada
-- Melakukan lookup berdasarkan `store_code` ↔ `kode_kios`
-- Menyimpan laporan ringkas ke file `report_*.txt`
-
-> **Syarat:** Nilai `store_code` di GBP **harus sama** dengan 
-> nilai `kode_kios` di database kios (contoh: `x90104`).
-> Pastikan shop code di GBP sudah diisi dengan benar.
-
----
-
-## LANGKAH 8 — Otomasi Harian
-
-### Opsi A: Pakai scheduler.py (paling mudah)
-
-Edit bagian `CONFIG` di `scheduler.py` sesuai setup kamu:
-
-```python
-CONFIG = {
-    "db_file"    : "database_kios.csv",   # path ke database
-    "db_mode"    : "csv",                 # "csv" atau "sqlite"
-    "db_key_col" : "kode_kios",           # kolom kunci di database
-    "account_id" : "",                    # kosongkan = semua akun
-}
-```
-
-Lalu jalankan:
-
-```bash
-# Jalankan loop — otomatis fetch + update setiap hari jam 08:00
-python scheduler.py --schedule 08:00
-```
-
-### Opsi B: Windows Task Scheduler
-
-1. Buka **Task Scheduler** → "Create Basic Task"
-2. Trigger: Daily, jam yang kamu mau
-3. Action: Start a program
-   - Program: `python`
-   - Arguments: `C:\path\ke\scheduler.py --run-now`
-   - Start in: `C:\path\ke\folder\gbp_verification`
-
-### Opsi C: Linux/Mac Cron
-
-```bash
-# Edit crontab
-crontab -e
-
-# Tambahkan baris ini (jalankan setiap hari jam 08:00)
-0 8 * * * cd /path/ke/gbp_verification && python scheduler.py --run-now >> logs/cron.log 2>&1
-```
+### Cara Menjalankan Opsi B:
+1. Aktifkan virtual environment di root direktori.
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Letakkan `credentials.json` hasil langkah setup Google API di root direktori.
+4. Jalankan fetch status perdana (dan OAuth login):
+   ```bash
+   python fetch_status.py
+   ```
+   *(Setelah login sukses di browser, file `token.json` otomatis terbuat di root)*
+5. Jalankan update database (lookup data hasil fetch ke database internal Anda):
+   ```bash
+   python update_database.py --gbp-file gbp_status_YYYYMMDD.csv --db-file database_kios.csv --mode csv --db-key-col kode_kios
+   ```
+6. Jalankan Dashboard Streamlit:
+   ```bash
+   streamlit run dashboard.py
+   ```
+7. Untuk menjalankan berkala (background task):
+   ```bash
+   python scheduler.py --schedule 08:00
+   ```
 
 ---
 
-## Troubleshooting
+## 🧠 LOGIKA BISNIS UTAMA (BUSINESS LOGIC)
 
-| Error | Solusi |
-|-------|--------|
-| `credentials.json not found` | Download credentials dari Google Cloud Console (Langkah 3) |
-| `403 ACCESS_DENIED` | API belum dapat approval dari Google, atau akun bukan admin GBP |
-| `store_code tidak cocok` | Cek shop code di GBP Manager — harus identik dengan kode di database |
-| `Token expired` | Hapus `token.json`, jalankan ulang, login kembali |
-| `ModuleNotFoundError` | Jalankan `pip install -r requirements.txt` |
+### 1. Penentuan Status Verifikasi (Prioritas Atas ke Bawah)
+Sistem (baik di Opsi A maupun Opsi B) mengklasifikasikan status verifikasi Google ke dalam 4 kategori berdasarkan data API:
+1. **`Suspended`**: Metadata lokasi menunjukkan `isSuspended`, `suspended`, atau `isDisabled` bernilai `True` (Toko ditangguhkan oleh Google).
+2. **`Duplicate`**: Lokasi terdeteksi sebagai `duplicateLocation` pada respons metadata Google.
+3. **`Verified`**: Lokasi terverifikasi penuh dan akun Anda memegang akses kepemilikan (`hasVoiceOfMerchant = True`).
+4. **`Need Verification` / `Unverified`**: Lokasi terdaftar namun belum terverifikasi oleh akun Anda.
+
+### 2. Status Evaluasi Koordinat (`Coord Status`)
+Sistem mengevaluasi kualitas data Latitude dan Longitude yang dikembalikan dari API Google Maps:
+* **`OK`**: Koordinat berhasil di-parsing dengan benar dan berada di dalam rentang bumi yang valid (Latitude -90 s/d 90, Longitude -180 s/d 180).
+* **`MISSING`**: Lokasi tidak memiliki koordinat sama sekali di Google.
+* **`PARSE_ERROR`**: Koordinat ada di API tetapi format angkanya rusak (misal salah ketik tanda baca).
+* **`OUT_OF_RANGE`**: Koordinat terbaca tetapi nilainya di luar batas koordinat peta dunia.
+
+### 3. Alur Rekonsiliasi (Pencocokan)
+Rekonsiliasi membandingkan **Master Data Kios** dengan data **GBP API**:
+* Pencocokan dilakukan menggunakan kunci unik (`store_code` di GBP vs `kode_kios`/`kode_outlet` di database internal).
+* Jika kode identik, sistem memperbarui status verifikasi internal mengikuti status aktual Google.
+* Jika kode kosong atau kode ganda (duplicate identifier di data Anda), sistem akan menandai baris tersebut sebagai `Manual Review` atau `Invalid` agar tidak merusak database.
 
 ---
 
-## Catatan Quota & Biaya
+## 🛠️ TROUBLESHOOTING UMUM
 
-- ✅ **Gratis** — Business Profile API tidak dikenakan biaya per request
-- Quota default: **100 request/detik**, **cukup untuk 2000+ lokasi**
-- Jika kena quota limit, script otomatis akan error — ajukan peningkatan quota 
-  di Google Cloud Console → APIs & Services → Quotas
+| Gejala/Error | Penyebab | Solusi |
+|---|---|---|
+| `403 ACCESS_DENIED` | Akun Google Anda belum terdaftar sebagai admin di GBP, atau akses restricted API belum disetujui Google. | Daftarkan email ke test users OAuth consent screen, atau tunggu persetujuan dari Google Developers. |
+| `Token expired / Invalid Grant` | Token OAuth di `token.json` kedaluwarsa atau di-revoke oleh Google Cloud Console. | Hapus file `token.json` lalu jalankan kembali skrip fetch untuk memicu login browser ulang. |
+| `store_code tidak cocok` | Kode kios di database internal berbeda dengan "Shop Code" di dashboard Google Business Profile. | Samakan "Shop Code / Store Code" di portal Google Business Profile Manager dengan kode outlet di sistem internal Anda. |
+| `ModuleNotFoundError` | Ada modul Python yang belum terpasang di Virtual Environment yang aktif. | Pastikan virtual environment telah aktif (`.venv`) dan jalankan kembali `pip install -r requirements.txt`. |
+
+---
+*FIFGROUP Google Business Profile Automation Toolset. Pastikan keamanan kredensial dengan tidak mengunggah file `.env`, `credentials.json`, atau `token.json` ke publik.*

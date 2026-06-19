@@ -344,14 +344,8 @@ class UpdateStatusView(View):
             if form.cleaned_data.get("save_to_disk"):
                 master_path_disk = form.cleaned_data.get("master_path", "").strip()
                 if master_path_disk and source_type == UpdateStatusForm.SOURCE_CSV:
-                    import shutil
-                    from pathlib import Path
-                    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    src = Path(master_path_disk)
-                    backup = src.with_name(f"{src.stem}_backup_{ts}{src.suffix}")
-                    shutil.copy(src, backup)
                     updated_master_df.to_csv(master_path_disk, index=False, encoding="utf-8")
-                    save_result_msg = f"✅ CSV master diperbarui. Backup: {backup}"
+                    save_result_msg = "✅ CSV master berhasil diperbarui."
 
             # 7. Data untuk template
             show_cols = [

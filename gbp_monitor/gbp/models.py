@@ -236,6 +236,24 @@ class MasterLocation(models.Model):
         return f"{self.business_name} [{self.store_code}] — {self.verification_status}"
 
 
+class MasterDataHistory(models.Model):
+    """
+    Menyimpan history jumlah total network setiap kali ada update master data.
+    Digunakan untuk data chart efisiensi penyimpanan.
+    """
+    total_network = models.IntegerField(default=0, verbose_name="Total Network")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Master Data History"
+        verbose_name_plural = "Master Data Histories"
+        db_table = "gbp_masterdatahistory"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.created_at.strftime('%Y-%m-%d %H:%M:%S')} - {self.total_network} networks"
+
+
 # ══════════════════════════════════════════════════════════════════════
 # RECONCILIATION JOB & RESULTS
 # ══════════════════════════════════════════════════════════════════════

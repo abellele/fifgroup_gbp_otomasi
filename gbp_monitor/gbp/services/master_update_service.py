@@ -120,7 +120,7 @@ def import_master_locations(
     Returns:
         dict: {total, created, updated, skipped, error, errors_detail}
     """
-    from gbp.models import MasterLocation
+    from gbp.models import MasterLocation, MasterDataHistory
 
     summary = {"total": 0, "created": 0, "updated": 0, "skipped": 0, "error": 0, "errors_detail": []}
 
@@ -157,6 +157,10 @@ def import_master_locations(
         )
 
     log.info(f"Mapping kolom: {col_map}")
+
+    # Hapus data master lama
+    MasterLocation.objects.all().delete()
+    log.info("Semua data MasterLocation sebelumnya telah dihapus.")
 
     now = timezone.now()
 
@@ -243,6 +247,12 @@ def import_master_locations(
         f"{summary['created']} dibuat, {summary['updated']} diupdate, "
         f"{summary['skipped']} dilewati, {summary['error']} error."
     )
+
+    # Simpan history total network
+    total_saved = MasterLocation.objects.count()
+    MasterDataHistory.objects.create(total_network=total_saved)
+    log.info(f"History total network disimpan: {total_saved} networks.")
+
     return summary
 
 
